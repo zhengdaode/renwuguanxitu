@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人物关系演化图</title>
+<style id="appCss">
+  :root{
+    --bg:#0e1116; --panel:#161a22; --panel2:#1d232e; --border:#2a3140;
+    --text:#e6e9ef; --muted:#8b93a5; --accent:#5b9dff; --danger:#f87171;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{display:flex;flex-direction:column;background:var(--bg);color:var(--text);
+       font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;font-size:14px;
+       overflow:hidden;user-select:none;}
+  input,textarea,select{user-select:text;}
+
+  /* ---------- 顶栏 ---------- */
+  header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);
+         border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  header h1{font-size:15px;font-weight:600;white-space:nowrap;}
+  .projName{background:transparent;border:none;border-bottom:1px dashed var(--border);
+            color:var(--muted);font-size:13px;padding:3px 4px;width:150px;font-family:inherit;}
+  .projName:focus{outline:none;border-bottom-color:var(--accent);color:var(--text);}
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;}
+  .btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+       border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.playing{background:#facc15;border-color:#facc15;color:#000;}
+  .btn.danger{color:var(--danger);border-color:rgba(248,113,113,.4);}
+  .btn.danger:hover{border-color:var(--danger);}
+  .btn.block{display:block;width:100%;margin-top:14px;}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .chk{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:13px;cursor:pointer;white-space:nowrap;}
+  .sep{width:1px;height:18px;background:var(--border);}
+
+  /* ---------- 主区 ---------- */
+  main{flex:1;display:flex;min-height:0;}
+  #canvasWrap{flex:1;position:relative;min-width:0;}
+  svg{width:100%;height:100%;display:block;background:radial-gradient(circle at 30% 20%, #12161e 0%, var(--bg) 60%);}
+  #hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--muted);
+        pointer-events:none;max-width:92%;line-height:1.7;}
+  #edgeTip{position:fixed;display:none;z-index:40;background:var(--panel);border:1px solid var(--border);
+           color:var(--text);font-size:12px;border-radius:6px;padding:5px 9px;pointer-events:none;
+           box-shadow:0 4px 14px rgba(0,0,0,.4);white-space:nowrap;}
+
+  /* ---------- 检查器 ---------- */
+  #inspector{width:290px;background:var(--panel);border-left:1px solid var(--border);
+             padding:16px;overflow-y:auto;flex-shrink:0;}
+  #inspector h3{font-size:13px;color:var(--muted);letter-spacing:2px;margin-bottom:12px;font-weight:600;}
+  .fld{display:block;margin-bottom:12px;font-size:12px;color:var(--muted);}
+  .fld input,.fld textarea,.fld select{width:100%;margin-top:4px;background:var(--panel2);
+       border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;
+       font-size:13px;font-family:inherit;resize:vertical;}
+  .fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--accent);}
+  .stat{font-size:12px;color:var(--muted);margin:8px 0;line-height:1.6;}
+  .tips{font-size:12px;color:var(--muted);line-height:1.8;margin-top:14px;
+        border-top:1px solid var(--border);padding-top:12px;}
+  .tips b{color:var(--text);}
+  #swatches,#pSwatches{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;}
+  .sw{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;}
+  .sw.active{border-color:#fff;}
+  .emojiRow{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+  .emojiRow button{background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+                   font-size:16px;padding:3px 7px;cursor:pointer;}
+  .emojiRow button:hover{border-color:var(--accent);}
+
+  /* ---------- 时间轴 ---------- */
+  footer{display:flex;gap:12px;padding:8px 16px 10px;background:var(--panel);
+         border-top:1px solid var(--border);align-items:stretch;}
+  #tlMain{flex:1;min-width:0;}
+  #periodsArea{position:relative;margin:0 10px 4px;}
+  .period{position:absolute;height:18px;border-radius:9px;font-size:11px;color:#0b0e13;
+          display:flex;align-items:center;justify-content:center;padding:0 8px;cursor:pointer;
+          white-space:nowrap;overflow:hidden;min-width:36px;font-weight:600;}
+  .period:hover{filter:brightness(1.15);}
+  .period.selected{outline:2px solid #fff;outline-offset:1px;}
+  #tlTrack{position:relative;height:48px;margin:0 10px;}
+  #trackBase{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--panel2);border-radius:2px;}
+  #trackFill{position:absolute;left:0;bottom:0;height:4px;background:var(--accent);border-radius:2px;transition:width .4s;}
+  .tick{position:absolute;top:0;transform:translateX(-50%);text-align:center;cursor:pointer;width:72px;}
+  .tick .dot{display:block;width:12px;height:12px;border-radius:50%;background:var(--panel2);
+             border:2px solid var(--muted);margin:2px auto;transition:all .2s;padding:0;}
+  .tick:hover .dot{border-color:var(--accent);}
+  .tick.active .dot{background:var(--accent);border-color:#fff;box-shadow:0 0 8px var(--accent);}
+  .tick.range-from .dot{border-color:#facc15;box-shadow:0 0 8px #facc15;}
+  .tick .yr{display:block;font-size:10px;color:var(--muted);line-height:1.3;pointer-events:none;}
+  .tick .nm{display:block;font-size:12px;color:var(--text);line-height:1.3;pointer-events:none;white-space:nowrap;}
+  .tick.active .nm{color:var(--accent);font-weight:600;}
+  #tlBtns{display:flex;flex-direction:column;gap:6px;justify-content:center;flex-shrink:0;}
+
+  /* ---------- 弹窗 ---------- */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:50;}
+  .modal.hidden{display:none;}
+  .modal-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;width:420px;max-width:92vw;}
+  .modal-card h3{margin-bottom:14px;font-size:15px;}
+  .radio{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;font-size:13px;cursor:pointer;line-height:1.5;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+</style>
+
+<style id="svgCss">
+  /* SVG 图元样式（单独维护：导出 PNG 时会内联进克隆的 SVG，禁止使用 var() 变量） */
+  #gridPath{fill:none;stroke:rgba(140,160,200,.14);stroke-width:1;}
+  svg text{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;}
+  .node{cursor:grab;transition:transform .5s cubic-bezier(.4,0,.2,1);animation:fadeIn .35s ease;}
+  .node:active{cursor:grabbing;}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .node .body{transition:filter .2s;}
+  .node .rim{fill:none;stroke:rgba(255,255,255,.28);stroke-width:1.5;transition:stroke .2s,filter .2s;pointer-events:none;}
+  .node:hover .rim{stroke:rgba(255,255,255,.75);}
+  .node.selected .rim{stroke:#fff;stroke-width:2.5;filter:drop-shadow(0 0 6px rgba(255,255,255,.5));}
+  .node.connect-from .rim{stroke:#5b9dff;stroke-width:2.5;stroke-dasharray:5 3;}
+  .node .content{fill:#fff;text-anchor:middle;dominant-baseline:central;pointer-events:none;
+                 font-weight:600;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:3px;}
+  .node .caption{fill:rgba(255,255,255,.72);font-size:11px;text-anchor:middle;pointer-events:none;
+                 paint-order:stroke;stroke:rgba(0,0,0,.5);stroke-width:3px;}
+  .node .tag{display:none;fill:#4ade80;font-size:11px;text-anchor:middle;font-weight:600;}
+  .node.is-new .tag{display:block;}
+  .node.is-new .rim{stroke:#4ade80;stroke-width:2.5;filter:drop-shadow(0 0 6px rgba(74,222,128,.85));}
+  .edge .edge-hit{stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:pointer;}
+  .edge .edge-vis{stroke-width:2.5;pointer-events:none;transition:filter .2s;}
+  .edge.selected .edge-vis{stroke-width:4;filter:drop-shadow(0 0 5px rgba(255,255,255,.6));}
+  .edge.is-new .edge-vis{filter:drop-shadow(0 0 5px rgba(74,222,128,.9));}
+  .edge.is-changed .edge-vis{filter:drop-shadow(0 0 5px rgba(250,204,21,.9));}
+  .ghost{opacity:.55;}
+  .ghost polygon{fill:none;stroke:#f87171;stroke-width:2;stroke-dasharray:6 4;}
+  .ghost line{stroke:#f87171;stroke-width:2;stroke-dasharray:6 4;}
+  .ghost text{fill:#f87171;font-size:12px;text-anchor:middle;pointer-events:none;}
+  .ghost .gtag{font-size:11px;font-weight:600;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🕸 人物关系演化图</h1>
+  <input class="projName" id="projName" title="项目名称（用于导出文件名）">
+  <div class="actions">
+    <button class="btn" id="btnAddNode">＋ 角色</button>
+    <button class="btn" id="btnConnect">🔗 连线</button>
+    <button class="btn" id="btnPlay">▶ 播放</button>
+    <label class="chk"><input type="checkbox" id="chkDiff" checked> 对比</label>
+    <label class="chk"><input type="checkbox" id="chkGrid" checked> 网格磁吸</label>
+    <span class="sep"></span>
+    <button class="btn" id="btnExport">导出 JSON</button>
+    <button class="btn" id="btnPNG">导出 PNG</button>
+    <button class="btn" id="btnImport">导入</button>
+    <button class="btn" id="btnNew">新建</button>
+    <button class="btn" id="btnReset">重置示例</button>
+    <input type="file" id="fileImport" accept=".json" hidden>
+  </div>
+</header>
+
+<main>
+  <div id="canvasWrap">
+    <svg id="svg">
+      <defs id="defs"></defs>
+      <g id="world">
+        <g id="gridLayer"><path id="gridPath" d=""/></g>
+        <g id="diffLayer"></g>
+        <g id="edgeLayer"></g>
+        <g id="nodeLayer"></g>
+      </g>
+    </svg>
+    <div id="hint"></div>
+    <div id="edgeTip"></div>
+  </div>
+  <aside id="inspector"></aside>
+</main>
+
+<footer>
+  <div id="tlMain">
+    <div id="periodsArea"></div>
+    <div id="tlTrack">
+      <div id="trackBase"></div>
+      <div id="trackFill"></div>
+      <div id="ticks"></div>
+    </div>
+  </div>
+  <div id="tlBtns">
+    <button class="btn" id="btnPeriod">＋ 时期标注</button>
+    <button class="btn" id="btnAddTp">＋ 新增时间点</button>
+  </div>
+</footer>
+
+<div class="modal hidden" id="modalTp">
+  <div class="modal-card">
+    <h3>新增时间点</h3>
+    <label class="radio"><input type="radio" name="tpmode" value="inherit" checked>
+      <span id="inheritText">继承当前时间点的内容（复制全部角色与关系，在此基础上修改）</span></label>
+    <label class="radio"><input type="radio" name="tpmode" value="blank">
+      <span>空白开始（不继承任何内容）</span></label>
+    <label class="fld">名称<input id="tpLabel" type="text"></label>
+    <label class="fld">年份 / 时间<input id="tpYear" type="text" placeholder="如：1840 年、第三年"></label>
+    <div class="modal-actions">
+      <button class="btn" id="tpCancel">取消</button>
+      <button class="btn primary" id="tpCreate">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="modalPeriod">
+  <div class="modal-card">
+    <h3>新增时期标注</h3>
+    <label class="fld">名称<input id="pdLabel" type="text"></label>
+    <div class="modal-actions">
+      <button class="btn" id="pdCancel">取消</button>
+      <button class="btn primary" id="pdCreate">创建</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= 基础工具 ================= */
+const $ = s => document.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+const genId = p => p + '_' + Math.random().toString(36).slice(2, 9);
+const clone = o => JSON.parse(JSON.stringify(o));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function svgEl(tag, cls){ const el = document.createElementNS(NS, tag); if (cls) el.setAttribute('class', cls); return el; }
+
+/* ================= 预设 ================= */
+const EDGE_TYPES = {
+  friend:{name:'友情', color:'#4ade80'},
+  love:  {name:'爱情', color:'#f472b6'},
+  family:{name:'亲情', color:'#fb923c'},
+  mentor:{name:'师徒', color:'#60a5fa'},
+  rival: {name:'竞争', color:'#facc15'},
+  enemy: {name:'敌对', color:'#f87171'},
+  other: {name:'其他', color:'#94a3b8'},
+};
+const NODE_COLORS = ['#5b9dff','#f472b6','#a78bfa','#fb923c','#4ade80','#facc15','#22d3ee','#f87171'];
+const PERIOD_COLORS = ['#60a5fa','#f87171','#4ade80','#facc15','#a78bfa','#22d3ee','#fb923c','#f472b6'];
+const EMOJI_PRESETS = ['😀','😎','🗡️','👑','💔','🔥','⚔️','🌙','⚡','🛡️','🎭','🕯️','🐍','🌸'];
+const LS_KEY = 'relmap-v2';
+const LS_UI = 'relmap-ui-v2';
+const HINT_DEFAULT = '拖动节点自动吸附六边形网格交点 · 双击空白添加角色 · 点击连线查看详情 · 滚轮缩放 · Delete 删除选中　｜　差异：🟢 新增　🟠 变更　🔴 虚线 = 消失/退场';
+
+/* ================= 六边形几何（pointy-top，外接圆半径 HEX_R） ================= */
+const HEX_R = 32;
+const SQ3 = Math.sqrt(3);
+function axialToPixel(q, r){ return { x: SQ3*HEX_R*(q + r/2), y: 1.5*HEX_R*r }; }
+function hexCorner(cx, cy, i){
+  const a = Math.PI/180 * (60*i - 90);
+  return { x: cx + HEX_R*Math.cos(a), y: cy + HEX_R*Math.sin(a) };
+}
+function hexPointsStr(cx, cy){
+  let s = '';
+  for(let i=0;i<6;i++){ const p = hexCorner(cx,cy,i); s += (i?' ':'') + p.x.toFixed(2) + ',' + p.y.toFixed(2); }
+  return s;
+}
+const HEX_LOCAL = hexPointsStr(0, 0);
+function nearestVertex(x, y){
+  // 先做立方坐标取整找最近六边形中心，再取该中心 6 个顶点中最近的一个
+  const qf = x/(SQ3*HEX_R) - y/(3*HEX_R), rf = y/(1.5*HEX_R);
+  let cq = Math.round(qf), cr = Math.round(rf), cs = Math.round(-qf-rf);
+  const dq = Math.abs(cq-qf), dr = Math.abs(cr-rf), ds = Math.abs(cs-(-qf-rf));
+  if(dq > dr && dq > ds) cq = -cr-cs; else if(dr > ds) cr = -cq-cs;
+  const c = axialToPixel(cq, cr);
+  let best = {x:c.x, y:c.y}, bd = Infinity;
+  for(let i=0;i<6;i++){
+    const p = hexCorner(c.x, c.y, i);
+    const d = (p.x-x)*(p.x-x) + (p.y-y)*(p.y-y);
+    if(d < bd){ bd = d; best = p; }
+  }
+  return best;
+}
+
+/* ================= 数据 =================
+   核心模型：每个时间点持有一份完整快照（nodes + edges）。
+   「继承」= 深拷贝当前快照作为新时间点的起点。
+   periods 为项目级时期标注，引用时间点 id，允许同区间多个重叠。 */
+function ensureDisplay(nd){ return nd.display = nd.display || {mode:'name', symbol:'', emoji:'', img:''}; }
+
+function demoProject(){
+  const N = (name,color,x,y,disp)=>({id:genId('n'), name, desc:'', color, x, y,
+              display:Object.assign({mode:'name',symbol:'',emoji:'',img:''}, disp||{})});
+  const E = (a,b,label,type,desc)=>({id:genId('e'), from:a.id, to:b.id, label, type, desc:desc||''});
+  const find = (tp,a,b)=>tp.edges.find(x=>(x.from===a.id&&x.to===b.id)||(x.from===b.id&&x.to===a.id));
+
+  const ly=N('林远','#5b9dff',340,230), sq=N('苏晴','#f472b6',590,140),
+        cm=N('陈默','#a78bfa',630,330,{mode:'emoji',emoji:'🗡️'}),
+        lz=N('老周','#fb923c',330,420,{mode:'symbol',symbol:'☯'}),
+        ql=N('秦岚','#22d3ee',790,230);
+  const tp1={id:genId('t'), label:'开端', year:'第一年', note:'故事开始：林远与苏晴、陈默是大学同学。',
+             nodes:[ly,sq,cm,lz],
+             edges:[E(ly,sq,'同学','friend'), E(ly,cm,'室友','friend'), E(cm,lz,'师徒','mentor','陈默早年拜入老周门下')]};
+
+  const tp2=clone(tp1); tp2.id=genId('t'); tp2.label='并肩'; tp2.year='第三年';
+  tp2.note='林远拜老周为师；秦岚登场，与苏晴成为闺蜜。';
+  Object.assign(find(tp2,ly,sq),{label:'恋人',type:'love',desc:'第二年末确定关系'});
+  Object.assign(find(tp2,ly,cm),{label:'竞争对手',type:'rival',desc:'同门竞技，互不相让'});
+  tp2.edges.push(E(ly,lz,'师徒','mentor','老周倾囊相授'));
+  tp2.nodes.push(ql);
+  tp2.edges.push(E(sq,ql,'闺蜜','friend'));
+
+  const tp3=clone(tp2); tp3.id=genId('t'); tp3.label='决裂'; tp3.year='第七年';
+  tp3.note='陈默黑化：与老周、林远相继决裂；苏晴远走他乡。';
+  Object.assign(find(tp3,ly,cm),{label:'决裂',type:'enemy',desc:'因传承之争彻底反目'});
+  Object.assign(find(tp3,cm,lz),{label:'决裂',type:'enemy',desc:'陈默叛出师门'});
+  tp3.nodes = tp3.nodes.filter(n=>n.id!==sq.id);
+  tp3.edges = tp3.edges.filter(e=>e.from!==sq.id && e.to!==sq.id);
+
+  return { name:'示例故事',
+           timePoints:[tp1,tp2,tp3],
+           periods:[
+             {id:genId('p'), label:'求学时代', from:tp1.id, to:tp2.id, color:'#60a5fa'},
+             {id:genId('p'), label:'全书主线', from:tp1.id, to:tp3.id, color:'#a78bfa'},
+             {id:genId('p'), label:'决裂之乱', from:tp2.id, to:tp3.id, color:'#f87171'},
+           ]};
+}
+
+/* ================= 运行状态 ================= */
+let project, current = 0, selection = null, connectFrom = null;
+let connectMode = false, placing = false;
+let periodFromId = null, pendingPeriod = null, periodArmed = false;
+let view = {x:0, y:0, k:1};
+let playTimer = null, viewTween = null;
+let drag = null, pan = null;
+let gridRect = null, saveWarned = false;
+const nodeEls = new Map();
+
+/* ================= DOM 引用 ================= */
+const svg=$('#svg'), defs=$('#defs'), world=$('#world'),
+      gridPath=$('#gridPath'), diffLayer=$('#diffLayer'),
+      edgeLayer=$('#edgeLayer'), nodeLayer=$('#nodeLayer'),
+      hintEl=$('#hint'), edgeTip=$('#edgeTip'), insp=$('#inspector'),
+      ticks=$('#ticks'), trackFill=$('#trackFill'), periodsArea=$('#periodsArea'),
+      chkDiff=$('#chkDiff'), chkGrid=$('#chkGrid'),
+      modalTp=$('#modalTp'), modalPeriod=$('#modalPeriod');
+
+/* ================= 持久化 ================= */
+const stripInternal = (k, v) => k.startsWith('_') ? undefined : v;   // 剔除渲染用临时字段
+const cleanJSON = o => JSON.stringify(o, stripInternal);
+function save(){
+  try{ localStorage.setItem(LS_KEY, cleanJSON(project)); }
+  catch(e){
+    if(!saveWarned){ saveWarned = true;
+      alert('本地自动保存失败（浏览器存储空间不足，通常是角色图片过大）。当前内容仍在页面上，请尽快「导出 JSON」备份。'); }
+  }
+}
+function loadSaved(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      if(p && Array.isArray(p.timePoints) && p.timePoints.length &&
+         p.timePoints.every(t=>Array.isArray(t.nodes)&&Array.isArray(t.edges))) return p;
+    }
+  }catch(e){}
+  return null;
+}
+function loadUiPrefs(){
+  try{
+    const u = JSON.parse(localStorage.getItem(LS_UI) || '{}');
+    if(typeof u.diff === 'boolean') chkDiff.checked = u.diff;
+    if(typeof u.grid === 'boolean') chkGrid.checked = u.grid;
+  }catch(e){}
+}
+function saveUiPrefs(){
+  try{ localStorage.setItem(LS_UI, JSON.stringify({diff:chkDiff.checked, grid:chkGrid.checked})); }catch(e){}
+}
+
+/* ================= 快照访问 ================= */
+const tpCur  = ()=> project.timePoints[current];
+const tpPrev = ()=> current>0 ? project.timePoints[current-1] : null;
+const tpIndex = id => project.timePoints.findIndex(t=>t.id===id);
+function nodeById(id){
+  for(const n of tpCur().nodes) if(n.id===id) return n;
+  return null;
+}
+function posOf(id){
+  const n = nodeById(id);
+  return n || {x:0,y:0};
+}
+function posAny(id){
+  for(const tp of [tpCur(), tpPrev()]){
+    if(!tp) continue;
+    const n = tp.nodes.find(n=>n.id===id);
+    if(n) return n;
+  }
+  return {x:0,y:0};
+}
+
+/* ================= 视图（平移/缩放/动画） ================= */
+function applyView(){
+  world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+  if(chkGrid.checked) rebuildGrid();
+}
+function toWorld(cx, cy){
+  const r = svg.getBoundingClientRect();
+  return {x:(cx - r.left - view.x)/view.k, y:(cy - r.top - view.y)/view.k};
+}
+function fitView(){
+  cancelTween();
+  const r = svg.getBoundingClientRect();
+  const tp = tpCur();
+  if(!tp.nodes.length){ view = {x:r.width/2-300, y:r.height/2-200, k:1}; applyView(); return; }
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  tp.nodes.forEach(n=>{
+    minx=Math.min(minx,n.x); miny=Math.min(miny,n.y);
+    maxx=Math.max(maxx,n.x); maxy=Math.max(maxy,n.y);
+  });
+  const w = maxx-minx+220, h = maxy-miny+240;
+  const k = clamp(Math.min(r.width/w, r.height/h), .3, 1.25);
+  view.k = k;
+  view.x = (r.width  - (minx+maxx)*k)/2;
+  view.y = (r.height - (miny+maxy)*k)/2;
+  applyView();
+}
+function cancelTween(){ if(viewTween){ clearTimeout(viewTween); viewTween = null; } }
+function animateView(target, ms=450){
+  cancelTween();
+  const from = {...view}, t0 = performance.now();
+  const step = ()=>{
+    const t = Math.min(1, (performance.now()-t0)/ms);
+    const e = t<.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+    view.x = from.x + (target.x-from.x)*e;
+    view.y = from.y + (target.y-from.y)*e;
+    view.k = from.k + (target.k-from.k)*e;
+    applyView();
+    if(t < 1) viewTween = setTimeout(step, 16);
+    else viewTween = null;
+  };
+  viewTween = setTimeout(step, 16);
+}
+function focusPair(aId, bId){
+  const a = posOf(aId), b = posOf(bId);
+  const r = svg.getBoundingClientRect(), pad = 150;
+  const minx = Math.min(a.x,b.x)-pad, maxx = Math.max(a.x,b.x)+pad;
+  const miny = Math.min(a.y,b.y)-pad, maxy = Math.max(a.y,b.y)+pad;
+  const k = clamp(Math.min(r.width/(maxx-minx), r.height/(maxy-miny)), .4, 1.6);
+  animateView({k, x: r.width/2 - (minx+maxx)/2*k, y: r.height/2 - (miny+maxy)/2*k});
+}
+
+/* ================= 网格（按可视范围懒生成） ================= */
+function rebuildGrid(){
+  const r = svg.getBoundingClientRect(), margin = 200/view.k;
+  const need = {
+    minX: -view.x/view.k - margin, minY: -view.y/view.k - margin,
+    maxX: (r.width - view.x)/view.k + margin, maxY: (r.height - view.y)/view.k + margin,
+  };
+  if(gridRect && need.minX>=gridRect.minX && need.minY>=gridRect.minY &&
+     need.maxX<=gridRect.maxX && need.maxY<=gridRect.maxY) return;
+  const mx = (need.maxX-need.minX)*.5 + 300, my = (need.maxY-need.minY)*.5 + 300;
+  const rect = {minX:need.minX-mx, maxX:need.maxX+mx, minY:need.minY-my, maxY:need.maxY+my};
+  const cols = Math.ceil((rect.maxX-rect.minX)/(SQ3*HEX_R)) + 2;
+  const rows = Math.ceil((rect.maxY-rect.minY)/(1.5*HEX_R)) + 2;
+  if(cols*rows > 8000){ gridPath.setAttribute('d',''); gridRect = rect; return; }  // 缩得太远时不渲染
+  let d = '';
+  const r0 = Math.floor(rect.minY/(1.5*HEX_R))-1, r1 = Math.ceil(rect.maxY/(1.5*HEX_R))+1;
+  for(let rr=r0; rr<=r1; rr++){
+    const off = rr/2;
+    const q0 = Math.floor(rect.minX/(SQ3*HEX_R)-off)-1, q1 = Math.ceil(rect.maxX/(SQ3*HEX_R)-off)+1;
+    for(let qq=q0; qq<=q1; qq++){
+      const p = axialToPixel(qq, rr);
+      if(p.x<rect.minX-HEX_R || p.x>rect.maxX+HEX_R || p.y<rect.minY-HEX_R || p.y>rect.maxY+HEX_R) continue;
+      d += 'M' + hexPointsStr(p.x, p.y) + 'Z';
+    }
+  }
+  gridPath.setAttribute('d', d);
+  gridRect = rect;
+}
+chkGrid.addEventListener('change', ()=>{
+  saveUiPrefs();
+  if(chkGrid.checked){ gridRect = null; rebuildGrid(); }
+  else gridPath.setAttribute('d','');
+});
+
+/* ================= 渲染：画布 ================= */
+function renderGraph(){
+  const tp = tpCur();
+  const seen = new Set();
+  for(const nd of tp.nodes){
+    seen.add(nd.id);
+    let el = nodeEls.get(nd.id);
+    if(!el){ el = createNodeEl(nd); nodeLayer.appendChild(el); nodeEls.set(nd.id, el); }
+    applyNodeEl(el, nd);
+  }
+  for(const [id, el] of Array.from(nodeEls)){
+    if(!seen.has(id)){
+      el.remove(); nodeEls.delete(id);
+      const cp = document.getElementById('clip_'+id); if(cp) cp.remove();
+    }
+  }
+  renderEdges();
+  renderDiff();
+  applySelectionClasses();
+}
+
+function createNodeEl(nd){
+  ensureDisplay(nd);
+  const g = svgEl('g','node'); g.dataset.id = nd.id;
+  const cp = svgEl('clipPath'); cp.setAttribute('id','clip_'+nd.id);
+  const cpPoly = svgEl('polygon'); cpPoly.setAttribute('points', HEX_LOCAL);
+  cp.appendChild(cpPoly); defs.appendChild(cp);
+
+  const body = svgEl('polygon','body'); body.setAttribute('points', HEX_LOCAL); body.setAttribute('fill', nd.color);
+  const rim  = svgEl('polygon','rim');  rim.setAttribute('points', HEX_LOCAL);
+  const content = svgEl('text','content');
+  const cap = svgEl('text','caption'); cap.setAttribute('y', HEX_R+17);
+  const tag = svgEl('text','tag'); tag.setAttribute('y', -(HEX_R+12)); tag.textContent = '新增';
+  g.append(body, rim, content, cap, tag);
+
+  g.style.transition = 'none';
+  applyNodeEl(g, nd);
+  requestAnimationFrame(()=>{ g.style.transition=''; });
+  return g;
+}
+function applyNodeEl(el, nd){
+  ensureDisplay(nd);
+  el.style.transform = `translate(${nd.x}px, ${nd.y}px)`;
+  el.querySelector('.body').setAttribute('fill', nd.color);
+  const d = nd.display;
+  let img = el.querySelector('image');
+  const content = el.querySelector('.content');
+  const cap = el.querySelector('.caption');
+
+  if(d.mode==='image' && d.img){
+    if(!img){
+      img = svgEl('image');
+      img.setAttribute('width', HEX_R*2); img.setAttribute('height', HEX_R*2);
+      img.setAttribute('x', -HEX_R); img.setAttribute('y', -HEX_R);
+      img.setAttribute('clip-path', `url(#clip_${nd.id})`);
+      img.setAttribute('preserveAspectRatio','xMidYMid slice');
+      el.insertBefore(img, el.querySelector('.rim'));
+    }
+    if(img.getAttribute('href') !== d.img) img.setAttribute('href', d.img);
+    img.style.display = '';
+    content.style.display = 'none';
+    cap.style.display = ''; cap.textContent = nd.name;
+    return;
+  }
+  if(img) img.style.display = 'none';
+  cap.style.display = 'none';
+  content.style.display = '';
+  if(d.mode==='symbol'){
+    content.textContent = d.symbol || nd.name.slice(0,1);
+    content.setAttribute('font-size', 20);
+    cap.style.display=''; cap.textContent = nd.name;
+  }else if(d.mode==='emoji'){
+    content.textContent = d.emoji || '😀';
+    content.setAttribute('font-size', 20);
+    cap.style.display=''; cap.textContent = nd.name;
+  }else{
+    content.textContent = nd.name;
+    content.setAttribute('font-size', 13);
+  }
+}
+
+function renderEdges(){
+  edgeLayer.innerHTML = '';
+  for(const ed of tpCur().edges) edgeLayer.appendChild(createEdgeEl(ed));
+}
+function createEdgeEl(ed){
+  const g = svgEl('g','edge'); g.dataset.id = ed.id;
+  const hit = svgEl('line','edge-hit');
+  const vis = svgEl('line','edge-vis');
+  g.append(hit, vis);
+  updateEdgeGeom(g, ed);
+  g.addEventListener('mouseenter', e=>showEdgeTip(ed, e));
+  g.addEventListener('mousemove', moveEdgeTip);
+  g.addEventListener('mouseleave', ()=>{ edgeTip.style.display='none'; });
+  return g;
+}
+function updateEdgeGeom(g, ed){
+  const a = posOf(ed.from), b = posOf(ed.to);
+  const t = EDGE_TYPES[ed.type] || EDGE_TYPES.other;
+  for(const l of g.querySelectorAll('line')){
+    l.setAttribute('x1',a.x); l.setAttribute('y1',a.y);
+    l.setAttribute('x2',b.x); l.setAttribute('y2',b.y);
+  }
+  g.querySelector('.edge-vis').setAttribute('stroke', t.color);
+}
+function updateAllEdgeGeom(){
+  for(const g of edgeLayer.querySelectorAll('.edge')){
+    const ed = tpCur().edges.find(e=>e.id===g.dataset.id);
+    if(ed) updateEdgeGeom(g, ed);
+  }
+}
+function showEdgeTip(ed, e){
+  const tp = tpCur();
+  const a = tp.nodes.find(n=>n.id===ed.from), b = tp.nodes.find(n=>n.id===ed.to);
+  edgeTip.textContent = `${a?a.name:'?'} · ${ed.label} · ${b?b.name:'?'}`;
+  edgeTip.style.display = 'block';
+  moveEdgeTip(e);
+}
+function moveEdgeTip(e){
+  edgeTip.style.left = (e.clientX+14)+'px';
+  edgeTip.style.top  = (e.clientY+14)+'px';
+}
+
+/* ================= 渲染：与上一时间点的差异 ================= */
+function edgeKey(a, b){ return [a,b].sort().join('~'); }
+
+function renderDiff(){
+  diffLayer.innerHTML = '';
+  for(const [,el] of nodeEls) el.classList.remove('is-new');
+  if(current === 0 || !chkDiff.checked) return;
+  const prev = tpPrev(), cur = tpCur();
+  const prevEdge = new Map(prev.edges.map(e=>[edgeKey(e.from,e.to), e]));
+  const curEdge  = new Map(cur.edges.map(e=>[edgeKey(e.from,e.to), e]));
+  const curIds   = new Set(cur.nodes.map(n=>n.id));
+
+  for(const n of prev.nodes){
+    if(!curIds.has(n.id)){
+      const g = svgEl('g','ghost');
+      g.style.transform = `translate(${n.x}px, ${n.y}px)`;
+      const p = svgEl('polygon'); p.setAttribute('points', HEX_LOCAL);
+      const t = svgEl('text'); t.setAttribute('dy', 4); t.textContent = n.name;
+      const tag = svgEl('text','gtag'); tag.setAttribute('y', -(HEX_R+12)); tag.textContent = '退场';
+      g.append(p, tag, t);
+      diffLayer.appendChild(g);
+    }
+  }
+  for(const e of prev.edges){
+    if(!curEdge.has(edgeKey(e.from,e.to))){
+      const a = posAny(e.from), b = posAny(e.to);
+      const g = svgEl('g','ghost');
+      const l = svgEl('line');
+      l.setAttribute('x1',a.x); l.setAttribute('y1',a.y);
+      l.setAttribute('x2',b.x); l.setAttribute('y2',b.y);
+      const t = svgEl('text');
+      t.setAttribute('x',(a.x+b.x)/2); t.setAttribute('y',(a.y+b.y)/2 - 6);
+      t.textContent = e.label + '（消失）';
+      g.append(l, t);
+      diffLayer.appendChild(g);
+    }
+  }
+  for(const n of cur.nodes){
+    if(!prev.nodes.find(p=>p.id===n.id)){
+      const el = nodeEls.get(n.id);
+      if(el) el.classList.add('is-new');
+    }
+  }
+  for(const e of cur.edges){
+    const p = prevEdge.get(edgeKey(e.from,e.to));
+    const el = edgeLayer.querySelector(`.edge[data-id="${e.id}"]`);
+    if(!el) continue;
+    if(!p) el.classList.add('is-new');
+    else if(p.label !== e.label || p.type !== e.type) el.classList.add('is-changed');
+  }
+}
+chkDiff.addEventListener('change', ()=>{ saveUiPrefs(); renderGraph(); });
+
+/* ================= 选择 ================= */
+function applySelectionClasses(){
+  for(const [id, el] of nodeEls){
+    el.classList.toggle('selected', !!(selection && selection.type==='node' && selection.id===id));
+    el.classList.toggle('connect-from', connectFrom === id);
+  }
+  edgeLayer.querySelectorAll('.edge').forEach(el=>{
+    el.classList.toggle('selected', !!(selection && selection.type==='edge' && selection.id===el.dataset.id));
+  });
+}
+function select(type, id){
+  selection = {type, id};
+  renderInspector(); applySelectionClasses(); renderTimeline();
+}
+function deselect(){
+  selection = null;
+  renderInspector(); applySelectionClasses(); renderTimeline();
+}
+
+/* ================= 时间轴（进度条 + 时期标注） ================= */
+function tickPos(i){
+  const n = project.timePoints.length;
+  return n===1 ? 50 : ((i + 0.5)/n)*100;
+}
+function assignLanes(){
+  const items = project.periods
+    .map(p=>({p, a:Math.min(tpIndex(p.from), tpIndex(p.to)), b:Math.max(tpIndex(p.from), tpIndex(p.to))}))
+    .filter(x=>x.a>=0 && x.b>=0)
+    .sort((x,y)=> x.a-y.a || x.b-y.b);
+  const laneEnd = [];
+  for(const it of items){
+    let lane = laneEnd.findIndex(end => it.a >= end);
+    if(lane === -1){ laneEnd.push(it.b); lane = laneEnd.length-1; }
+    else laneEnd[lane] = it.b;
+    it.p._lane = lane; it.p._a = it.a; it.p._b = it.b;
+  }
+  return laneEnd.length;
+}
+function renderTimeline(){
+  // 时期标注（允许同区间重叠 → 自动分行）
+  const laneCount = assignLanes();
+  periodsArea.innerHTML = '';
+  periodsArea.style.height = (laneCount*24 + 4) + 'px';
+  for(const p of project.periods){
+    if(p._a == null || p._a < 0) continue;
+    const el = document.createElement('div');
+    el.className = 'period' + (selection && selection.type==='period' && selection.id===p.id ? ' selected' : '');
+    el.style.left = tickPos(p._a) + '%';
+    el.style.width = (tickPos(p._b) - tickPos(p._a)) + '%';
+    el.style.top = (p._lane*24 + 2) + 'px';
+    el.style.background = p.color;
+    el.textContent = p.label;
+    el.addEventListener('click', ()=>select('period', p.id));
+    periodsArea.appendChild(el);
+  }
+  // 进度条 + 刻度
+  trackFill.style.width = tickPos(current) + '%';
+  ticks.innerHTML = '';
+  project.timePoints.forEach((tp,i)=>{
+    const t = document.createElement('div');
+    t.className = 'tick' + (i===current ? ' active' : '') +
+                  (periodFromId===tp.id ? ' range-from' : '');
+    t.style.left = tickPos(i) + '%';
+    t.innerHTML = `<button class="dot" title="${esc(tp.label)}"></button>` +
+                  (tp.year ? `<span class="yr">${esc(tp.year)}</span>` : '') +
+                  `<span class="nm">${esc(tp.label)}</span>`;
+    t.addEventListener('click', ()=>onTickClick(tp, i));
+    ticks.appendChild(t);
+  });
+}
+function onTickClick(tp, i){
+  if(periodArmed){
+    if(!periodFromId){
+      periodFromId = tp.id;
+      setHint(`时期标注：起点「${tp.label}」已选，再点击终点刻度（Esc 取消）`);
+    }else if(periodFromId === tp.id){
+      periodFromId = null; setHint();
+    }else{
+      const i0 = tpIndex(periodFromId), i1 = tpIndex(tp.id);
+      pendingPeriod = i0 < i1 ? {from:periodFromId, to:tp.id} : {from:tp.id, to:periodFromId};
+      periodFromId = null; periodArmed = false;
+      openPeriodModal();
+    }
+  }else{
+    switchTime(i);
+  }
+  renderTimeline();
+}
+
+/* ================= 渲染：检查器 ================= */
+function tpOptions(sel){
+  return project.timePoints.map((t,i)=>
+    `<option value="${t.id}"${t.id===sel?' selected':''}>${i+1}. ${esc(t.label)}</option>`).join('');
+}
+function renderInspector(){
+  const tp = tpCur();
+
+  if(selection && selection.type === 'node'){
+    const nd = tp.nodes.find(n=>n.id===selection.id);
+    if(!nd){ selection = null; }
+    else{
+      const d = ensureDisplay(nd);
+      insp.innerHTML = `
+        <h3>角色</h3>
+        <label class="fld">名称<input id="iNodeName" value="${esc(nd.name)}"></label>
+        <label class="fld">展示方式<select id="iDispMode">
+          <option value="name"${d.mode==='name'?' selected':''}>名称</option>
+          <option value="symbol"${d.mode==='symbol'?' selected':''}>符号</option>
+          <option value="emoji"${d.mode==='emoji'?' selected':''}>Emoji</option>
+          <option value="image"${d.mode==='image'?' selected':''}>图片</option>
+        </select></label>
+        <div id="iDispExtra"></div>
+        <label class="fld">简介<textarea id="iNodeDesc" rows="3">${esc(nd.desc)}</textarea></label>
+        <div class="fld">颜色<div id="swatches">${
+          NODE_COLORS.map(c=>`<button class="sw${c===nd.color?' active':''}" data-c="${c}" style="background:${c}"></button>`).join('')
+        }</div></div>
+        <div class="stat">所属时间点：${esc(tp.label)}</div>
+        <button id="iDelNode" class="btn danger block">从此时间点删除该角色</button>
+        <p class="tips">删除只影响当前时间点的快照，其他时间点不受影响。</p>`;
+      const renderExtra = ()=>{
+        const box = $('#iDispExtra');
+        if(d.mode==='symbol'){
+          box.innerHTML = `<label class="fld">符号（1~2 个字符）<input id="iSymbol" maxlength="4" value="${esc(d.symbol)}"></label>
+            <p class="stat">留空则显示名称首字。</p>`;
+          $('#iSymbol').addEventListener('input', e=>{
+            d.symbol = e.target.value;
+            const el = nodeEls.get(nd.id); if(el) applyNodeEl(el, nd);
+            save();
+          });
+        }else if(d.mode==='emoji'){
+          box.innerHTML = `<label class="fld">Emoji<input id="iEmoji" maxlength="8" value="${esc(d.emoji)}"></label>
+            <div class="emojiRow">${EMOJI_PRESETS.map(e=>`<button type="button" data-e="${e}">${e}</button>`).join('')}</div>`;
+          $('#iEmoji').addEventListener('input', e=>{
+            d.emoji = e.target.value;
+            const el = nodeEls.get(nd.id); if(el) applyNodeEl(el, nd);
+            save();
+          });
+          box.querySelector('.emojiRow').addEventListener('click', e=>{
+            const b = e.target.closest('button[data-e]'); if(!b) return;
+            d.emoji = b.dataset.e;
+            $('#iEmoji').value = d.emoji;
+            const el = nodeEls.get(nd.id); if(el) applyNodeEl(el, nd);
+            save();
+          });
+        }else if(d.mode==='image'){
+          box.innerHTML = `<div class="fld">图片
+              <button id="iImgUp" class="btn" style="width:100%">${d.img?'更换图片':'上传图片'}</button>
+              ${d.img?'<button id="iImgClr" class="btn danger" style="width:100%;margin-top:6px">清除图片</button>':''}
+              <p class="stat">图片内嵌保存，建议小于 300KB。</p></div>
+            <input type="file" id="iImgFile" accept="image/*" hidden>`;
+          $('#iImgUp').addEventListener('click', ()=>$('#iImgFile').click());
+          $('#iImgFile').addEventListener('change', e=>{
+            const f = e.target.files[0]; if(!f) return;
+            if(f.size > 1024*1024 && !confirm('图片超过 1MB，可能导致浏览器本地保存失败，确定使用？')) return;
+            const rd = new FileReader();
+            rd.onload = ()=>{
+              d.img = rd.result;
+              renderGraph(); save();
+            };
+            rd.readAsDataURL(f);
+            e.target.value = '';
+          });
+          const clr = $('#iImgClr');
+          if(clr) clr.addEventListener('click', ()=>{ d.img=''; renderGraph(); renderInspector(); save(); });
+        }else{
+          box.innerHTML = '';
+        }
+      };
+      renderExtra();
+      $('#iDispMode').addEventListener('change', e=>{
+        d.mode = e.target.value;
+        renderGraph(); renderExtra(); save();
+      });
+      $('#iNodeName').addEventListener('input', e=>{
+        nd.name = e.target.value;
+        const el = nodeEls.get(nd.id); if(el) applyNodeEl(el, nd);
+        save();
+      });
+      $('#iNodeDesc').addEventListener('input', e=>{ nd.desc = e.target.value; save(); });
+      $('#swatches').addEventListener('click', e=>{
+        const b = e.target.closest('.sw'); if(!b) return;
+        nd.color = b.dataset.c;
+        renderGraph(); renderInspector(); save();
+      });
+      $('#iDelNode').addEventListener('click', ()=>{
+        if(!confirm(`从「${tp.label}」删除角色「${nd.name}」？其相关关系也会一并删除。`)) return;
+        tp.nodes = tp.nodes.filter(n=>n.id!==nd.id);
+        tp.edges = tp.edges.filter(e=>e.from!==nd.id && e.to!==nd.id);
+        selection = null;
+        renderAll(); save();
+      });
+      return;
+    }
+  }
+
+  if(selection && selection.type === 'edge'){
+    const ed = tp.edges.find(e=>e.id===selection.id);
+    if(!ed){ selection = null; }
+    else{
+      const a = tp.nodes.find(n=>n.id===ed.from), b = tp.nodes.find(n=>n.id===ed.to);
+      insp.innerHTML = `
+        <h3>关系</h3>
+        <div class="stat">${esc(a?a.name:'?')} ⇄ ${esc(b?b.name:'?')}</div>
+        <label class="fld">关系名称<input id="iEdgeLabel" value="${esc(ed.label)}"></label>
+        <label class="fld">类型<select id="iEdgeType">${
+          Object.entries(EDGE_TYPES).map(([k,v])=>`<option value="${k}"${k===ed.type?' selected':''}>${v.name}</option>`).join('')
+        }</select></label>
+        <label class="fld">详情<textarea id="iEdgeDesc" rows="3" placeholder="这段关系的由来、变化原因……">${esc(ed.desc||'')}</textarea></label>
+        <button id="iDelEdge" class="btn danger block">删除该关系（仅当前时间点）</button>`;
+      const gEl = ()=> edgeLayer.querySelector(`.edge[data-id="${ed.id}"]`);
+      $('#iEdgeLabel').addEventListener('input', e=>{
+        ed.label = e.target.value; save();
+      });
+      $('#iEdgeType').addEventListener('change', e=>{
+        ed.type = e.target.value;
+        const g = gEl(); if(g) updateEdgeGeom(g, ed);
+        save();
+      });
+      $('#iEdgeDesc').addEventListener('input', e=>{ ed.desc = e.target.value; save(); });
+      $('#iDelEdge').addEventListener('click', ()=>{
+        tp.edges = tp.edges.filter(e=>e.id!==ed.id);
+        selection = null;
+        renderAll(); save();
+      });
+      return;
+    }
+  }
+
+  if(selection && selection.type === 'period'){
+    const pd = project.periods.find(p=>p.id===selection.id);
+    if(!pd){ selection = null; }
+    else{
+      insp.innerHTML = `
+        <h3>时期标注</h3>
+        <label class="fld">名称<input id="iPeriodLabel" value="${esc(pd.label)}"></label>
+        <div class="fld">颜色<div id="pSwatches">${
+          PERIOD_COLORS.map(c=>`<button class="sw${c===pd.color?' active':''}" data-c="${c}" style="background:${c}"></button>`).join('')
+        }</div></div>
+        <label class="fld">起点<select id="iPeriodFrom">${tpOptions(pd.from)}</select></label>
+        <label class="fld">终点<select id="iPeriodTo">${tpOptions(pd.to)}</select></label>
+        <button id="iDelPeriod" class="btn danger block">删除该时期标注</button>`;
+      $('#iPeriodLabel').addEventListener('input', e=>{ pd.label = e.target.value; renderTimeline(); save(); });
+      $('#pSwatches').addEventListener('click', e=>{
+        const b = e.target.closest('.sw'); if(!b) return;
+        pd.color = b.dataset.c;
+        renderTimeline(); renderInspector(); save();
+      });
+      $('#iPeriodFrom').addEventListener('change', e=>{ pd.from = e.target.value; renderTimeline(); save(); });
+      $('#iPeriodTo').addEventListener('change', e=>{ pd.to = e.target.value; renderTimeline(); save(); });
+      $('#iDelPeriod').addEventListener('click', ()=>{
+        project.periods = project.periods.filter(p=>p.id!==pd.id);
+        selection = null;
+        renderAll(); save();
+      });
+      return;
+    }
+  }
+
+  // 默认：时间点信息
+  insp.innerHTML = `
+    <h3>时间点</h3>
+    <label class="fld">名称<input id="iTpLabel" value="${esc(tp.label)}"></label>
+    <label class="fld">年份 / 时间<input id="iTpYear" value="${esc(tp.year||'')}" placeholder="如：1840 年、第三年"></label>
+    <label class="fld">备注<textarea id="iTpNote" rows="4">${esc(tp.note)}</textarea></label>
+    <div class="stat">角色 ${tp.nodes.length} · 关系 ${tp.edges.length}</div>
+    <p class="tips">点击角色或连线进行编辑；点击连线会自动聚焦到两端角色并显示详情。<br>
+    「＋ 新增时间点」可选择<b>继承当前时间点</b>；「＋ 时期标注」先点起点刻度再点终点刻度，同一区间可叠加多个。</p>
+    ${project.timePoints.length>1 ? '<button id="iDelTp" class="btn danger block">删除此时间点</button>' : ''}`;
+  $('#iTpLabel').addEventListener('input', e=>{ tp.label = e.target.value; renderTimeline(); save(); });
+  $('#iTpYear').addEventListener('input', e=>{ tp.year = e.target.value; renderTimeline(); save(); });
+  $('#iTpNote').addEventListener('input', e=>{ tp.note = e.target.value; save(); });
+  const d = $('#iDelTp');
+  if(d) d.addEventListener('click', ()=>delTimePoint(current));
+}
+
+function renderHeader(){ $('#projName').value = project.name || ''; }
+function renderAll(){ renderHeader(); renderTimeline(); renderInspector(); renderGraph(); }
+
+/* ================= 增删 ================= */
+function addNodeAt(w){
+  const tp = tpCur();
+  if(chkGrid.checked){ const v = nearestVertex(w.x, w.y); w = v; }
+  const nd = {id:genId('n'), name:'新角色', desc:'',
+              color:NODE_COLORS[tp.nodes.length % NODE_COLORS.length],
+              x:Math.round(w.x), y:Math.round(w.y),
+              display:{mode:'name', symbol:'', emoji:'', img:''}};
+  tp.nodes.push(nd);
+  renderGraph(); save();
+  select('node', nd.id);
+  const i = $('#iNodeName'); if(i) i.select();
+}
+function addEdge(aId, bId){
+  if(aId === bId) return;
+  const tp = tpCur();
+  const dup = tp.edges.find(x=>(x.from===aId&&x.to===bId)||(x.from===bId&&x.to===aId));
+  if(dup){ select('edge', dup.id); focusPair(dup.from, dup.to); return; }
+  const ed = {id:genId('e'), from:aId, to:bId, label:'新关系', type:'other', desc:''};
+  tp.edges.push(ed);
+  renderGraph(); save();
+  select('edge', ed.id);
+  const i = $('#iEdgeLabel'); if(i){ i.focus(); i.select(); }
+}
+function deleteSelection(){
+  const tp = tpCur();
+  if(selection.type === 'node'){
+    tp.nodes = tp.nodes.filter(n=>n.id!==selection.id);
+    tp.edges = tp.edges.filter(e=>e.from!==selection.id && e.to!==selection.id);
+  }else if(selection.type === 'edge'){
+    tp.edges = tp.edges.filter(e=>e.id!==selection.id);
+  }else if(selection.type === 'period'){
+    project.periods = project.periods.filter(p=>p.id!==selection.id);
+  }
+  selection = null;
+  renderAll(); save();
+}
+function switchTime(i){
+  current = i; selection = null; connectFrom = null;
+  stopPlay();
+  renderAll();
+}
+function delTimePoint(i){
+  if(project.timePoints.length <= 1) return;
+  const tp = project.timePoints[i];
+  if(!confirm(`删除时间点「${tp.label}」？引用它的时期标注也会一并删除。`)) return;
+  project.timePoints.splice(i, 1);
+  project.periods = project.periods.filter(p=>tpIndex(p.from)>=0 && tpIndex(p.to)>=0);
+  current = clamp(current, 0, project.timePoints.length - 1);
+  selection = null;
+  renderAll(); save();
+}
+function createTimePoint(mode, label, year){
+  const prev = tpCur();
+  const tp = {id:genId('t'), label: label || ('时间点 ' + (project.timePoints.length+1)),
+              year: year || '', note:'', nodes:[], edges:[]};
+  if(mode === 'inherit'){ tp.nodes = clone(prev.nodes); tp.edges = clone(prev.edges); }
+  project.timePoints.push(tp);
+  switchTime(project.timePoints.length - 1);
+  save();
+}
+
+/* ================= 模式 ================= */
+function setHint(m){ hintEl.textContent = m || HINT_DEFAULT; }
+function setConnectMode(v){
+  connectMode = v; connectFrom = null;
+  $('#btnConnect').classList.toggle('active', v);
+  setHint(v ? '连线模式：点击第一个角色作为起点（Esc 退出）' : '');
+  applySelectionClasses();
+}
+function setPlacing(v){
+  placing = v;
+  $('#btnAddNode').classList.toggle('active', v);
+  setHint(v ? '放置模式：点击画布放置新角色（已开启网格时自动吸附，Esc 退出）' : '');
+}
+
+/* ================= 画布交互 ================= */
+svg.addEventListener('mousedown', e=>{
+  if(e.button !== 0) return;
+  stopPlay();
+  const ng = e.target.closest('.node');
+  const eg = e.target.closest('.edge');
+
+  if(ng){
+    const id = ng.dataset.id;
+    if(connectMode){
+      if(!connectFrom){ connectFrom = id; applySelectionClasses(); }
+      else if(connectFrom === id){ connectFrom = null; applySelectionClasses(); }
+      else{ const from = connectFrom; connectFrom = null; setConnectMode(false); addEdge(from, id); }
+    }else if(placing){
+      setPlacing(false);
+    }else{
+      startNodeDrag(ng, e);
+    }
+  }else if(eg){
+    if(placing) setPlacing(false);
+    const ed = tpCur().edges.find(x=>x.id===eg.dataset.id);
+    select('edge', eg.dataset.id);
+    if(ed) focusPair(ed.from, ed.to);
+  }else{
+    if(placing){ setPlacing(false); addNodeAt(toWorld(e.clientX, e.clientY)); return; }
+    startPan(e);
+  }
+});
+
+function startNodeDrag(g, e){
+  const nd = nodeById(g.dataset.id);
+  if(!nd) return;
+  const w = toWorld(e.clientX, e.clientY);
+  drag = {nd, el:g, dx:w.x-nd.x, dy:w.y-nd.y, moved:false};
+  g.style.transition = 'none';
+  e.preventDefault();
+}
+function startPan(e){
+  cancelTween();
+  pan = {mx:e.clientX, my:e.clientY, sx:view.x, sy:view.y, moved:false};
+  e.preventDefault();
+}
+
+window.addEventListener('mousemove', e=>{
+  if(drag){
+    const w = toWorld(e.clientX, e.clientY);
+    let nx = w.x - drag.dx, ny = w.y - drag.dy;
+    if(chkGrid.checked){ const v = nearestVertex(nx, ny); nx = v.x; ny = v.y; }
+    if(Math.hypot(nx-drag.nd.x, ny-drag.nd.y) > 2) drag.moved = true;
+    drag.nd.x = nx; drag.nd.y = ny;
+    applyNodeEl(drag.el, drag.nd);
+    updateAllEdgeGeom();
+  }
+  if(pan){
+    if(Math.hypot(e.clientX-pan.mx, e.clientY-pan.my) > 3) pan.moved = true;
+    view.x = pan.sx + (e.clientX - pan.mx);
+    view.y = pan.sy + (e.clientY - pan.my);
+    applyView();
+  }
+});
+window.addEventListener('mouseup', ()=>{
+  if(drag){
+    drag.el.style.transition = '';
+    if(drag.moved) save();
+    else select('node', drag.nd.id);
+    drag = null;
+  }
+  if(pan){
+    if(!pan.moved) deselect();
+    pan = null;
+  }
+});
+
+svg.addEventListener('dblclick', e=>{
+  if(placing || connectMode) return;
+  if(e.target.closest('.node') || e.target.closest('.edge')) return;
+  addNodeAt(toWorld(e.clientX, e.clientY));
+});
+
+svg.addEventListener('wheel', e=>{
+  e.preventDefault();
+  cancelTween();
+  const r = svg.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const wx = (mx - view.x)/view.k, wy = (my - view.y)/view.k;
+  view.k = clamp(view.k * (e.deltaY < 0 ? 1.12 : 1/1.12), .25, 2.5);
+  view.x = mx - wx*view.k; view.y = my - wy*view.k;
+  applyView();
+}, {passive:false});
+
+window.addEventListener('keydown', e=>{
+  if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if(e.key === 'Escape'){
+    setConnectMode(false); setPlacing(false); deselect();
+    if(periodFromId || periodArmed){ periodFromId = null; periodArmed = false; renderTimeline(); setHint(); }
+    modalTp.classList.add('hidden'); modalPeriod.classList.add('hidden');
+  }
+  if((e.key === 'Delete' || e.key === 'Backspace') && selection){
+    deleteSelection();
+  }
+});
+
+/* ================= 播放演化 ================= */
+function startPlay(){
+  playTimer = setInterval(()=>{
+    if(current < project.timePoints.length - 1) switchTime(current + 1);
+    else stopPlay();
+  }, 1800);
+  $('#btnPlay').textContent = '⏸ 暂停';
+  $('#btnPlay').classList.add('playing');
+}
+function stopPlay(){
+  if(!playTimer) return;
+  clearInterval(playTimer); playTimer = null;
+  $('#btnPlay').textContent = '▶ 播放';
+  $('#btnPlay').classList.remove('playing');
+}
+
+/* ================= 导出 / 导入 ================= */
+function loadProject(p){
+  project = p; current = 0; selection = null; connectFrom = null;
+  periodFromId = null; pendingPeriod = null; periodArmed = false;
+  stopPlay();
+  renderAll(); fitView(); save();
+}
+$('#projName').addEventListener('input', e=>{ project.name = e.target.value; save(); });
+
+$('#btnExport').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(project, stripInternal, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (project.name || 'relationship-project') + '.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+});
+$('#btnImport').addEventListener('click', ()=>$('#fileImport').click());
+$('#fileImport').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const p = JSON.parse(rd.result);
+      if(!p || !Array.isArray(p.timePoints) || !p.timePoints.length) throw new Error('格式不正确');
+      if(!Array.isArray(p.periods)) p.periods = [];
+      loadProject(p);
+    }catch(err){ alert('导入失败：' + err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value = '';
+});
+$('#btnNew').addEventListener('click', ()=>{
+  if(!confirm('新建空白项目？当前内容请先「导出 JSON」备份。')) return;
+  loadProject({name:'未命名项目',
+    timePoints:[{id:genId('t'), label:'时间点 1', year:'', note:'', nodes:[], edges:[]}],
+    periods:[]});
+});
+$('#btnReset').addEventListener('click', ()=>{
+  if(!confirm('重置为示例数据？当前内容将被覆盖。')) return;
+  loadProject(demoProject());
+});
+
+/* 导出 PNG：克隆 SVG → 内联样式 → 光栅化 */
+function buildPNGBlob(){
+  return new Promise((resolve, reject)=>{
+    deselect();
+    const tp = tpCur();
+    if(!tp.nodes.length){ reject(new Error('当前时间点没有角色')); return; }
+    let minx=Infinity, miny=Infinity, maxx=-Infinity, maxy=-Infinity;
+    tp.nodes.forEach(n=>{
+      minx=Math.min(minx,n.x); miny=Math.min(miny,n.y);
+      maxx=Math.max(maxx,n.x); maxy=Math.max(maxy,n.y);
+    });
+    const pad = HEX_R + 80;
+    minx-=pad; miny-=pad; maxx+=pad; maxy+=pad;
+    const w = maxx-minx, h = maxy-miny;
+    const scale = Math.min(2, 2200/w);
+    const cloneSvg = svg.cloneNode(true);
+    cloneSvg.querySelector('#world').setAttribute('transform','');
+    cloneSvg.querySelector('#gridPath').setAttribute('d','');
+    cloneSvg.setAttribute('xmlns', NS);
+    cloneSvg.setAttribute('viewBox', `${minx} ${miny} ${w} ${h}`);
+    cloneSvg.setAttribute('width', Math.round(w*scale));
+    cloneSvg.setAttribute('height', Math.round(h*scale));
+    const st = document.createElementNS(NS, 'style');
+    st.textContent = document.getElementById('svgCss').textContent;
+    cloneSvg.insertBefore(st, cloneSvg.firstChild);
+    const xml = new XMLSerializer().serializeToString(cloneSvg);
+    const url = URL.createObjectURL(new Blob([xml], {type:'image/svg+xml;charset=utf-8'}));
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = Math.round(w*scale); c.height = Math.round(h*scale);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0e1116';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b=> b ? resolve(b) : reject(new Error('画布导出失败')), 'image/png');
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('SVG 渲染失败')); };
+    img.src = url;
+  });
+}
+$('#btnPNG').addEventListener('click', async ()=>{
+  try{
+    const blob = await buildPNGBlob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${project.name || '关系图'}-${tpCur().label}.png`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  }catch(err){ alert('导出失败：' + err.message); }
+});
+
+/* ================= 弹窗：新增时间点 ================= */
+$('#btnAddTp').addEventListener('click', ()=>{
+  $('#inheritText').textContent = `继承当前时间点「${tpCur().label}」的内容（复制全部角色与关系，在此基础上修改）`;
+  $('#tpLabel').value = '时间点 ' + (project.timePoints.length + 1);
+  $('#tpYear').value = '';
+  modalTp.classList.remove('hidden');
+  $('#tpLabel').focus(); $('#tpLabel').select();
+});
+$('#tpCancel').addEventListener('click', ()=>modalTp.classList.add('hidden'));
+$('#tpCreate').addEventListener('click', ()=>{
+  const mode = document.querySelector('input[name="tpmode"]:checked').value;
+  createTimePoint(mode, $('#tpLabel').value.trim(), $('#tpYear').value.trim());
+  modalTp.classList.add('hidden');
+});
+$('#tpLabel').addEventListener('keydown', e=>{ if(e.key === 'Enter') $('#tpCreate').click(); });
+modalTp.addEventListener('click', e=>{ if(e.target === modalTp) modalTp.classList.add('hidden'); });
+
+/* ================= 弹窗：时期标注 ================= */
+function openPeriodModal(){
+  $('#pdLabel').value = '时期 ' + (project.periods.length + 1);
+  modalPeriod.classList.remove('hidden');
+  $('#pdLabel').focus(); $('#pdLabel').select();
+}
+$('#btnPeriod').addEventListener('click', ()=>{
+  periodArmed = true; periodFromId = null;
+  setHint('时期标注：请先在时间轴上点击起点刻度（黄色高亮），再点击终点刻度');
+  renderTimeline();
+});
+$('#pdCancel').addEventListener('click', ()=>{
+  pendingPeriod = null; modalPeriod.classList.add('hidden');
+});
+$('#pdCreate').addEventListener('click', ()=>{
+  if(pendingPeriod){
+    project.periods.push({id:genId('p'), label: $('#pdLabel').value.trim() || ('时期 ' + (project.periods.length+1)),
+                          from: pendingPeriod.from, to: pendingPeriod.to,
+                          color: PERIOD_COLORS[project.periods.length % PERIOD_COLORS.length]});
+    pendingPeriod = null;
+    save(); renderTimeline();
+  }
+  modalPeriod.classList.add('hidden'); setHint();
+});
+$('#pdLabel').addEventListener('keydown', e=>{ if(e.key === 'Enter') $('#pdCreate').click(); });
+modalPeriod.addEventListener('click', e=>{ if(e.target === modalPeriod){ pendingPeriod = null; modalPeriod.classList.add('hidden'); } });
+
+/* ================= 启动 ================= */
+project = loadSaved() || demoProject();
+loadUiPrefs();
+setHint();
+renderAll();
+fitView();
+save();
+</script>
+</body>
+</html>
