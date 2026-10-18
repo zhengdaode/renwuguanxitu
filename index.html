@@ -961,9 +961,9 @@ function deleteSelection(){
   selection = null;
   renderAll(); save();
 }
-function switchTime(i){
+function switchTime(i, keepPlay){
   current = i; selection = null; connectFrom = null;
-  stopPlay();
+  if(!keepPlay) stopPlay();
   renderAll();
 }
 function delTimePoint(i){
@@ -1105,7 +1105,7 @@ window.addEventListener('keydown', e=>{
 /* ================= 播放演化 ================= */
 function startPlay(){
   playTimer = setInterval(()=>{
-    if(current < project.timePoints.length - 1) switchTime(current + 1);
+    if(current < project.timePoints.length - 1) switchTime(current + 1, true);
     else stopPlay();
   }, 1800);
   $('#btnPlay').textContent = '⏸ 暂停';
@@ -1213,6 +1213,11 @@ $('#btnPNG').addEventListener('click', async ()=>{
     setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
   }catch(err){ alert('导出失败：' + err.message); }
 });
+
+/* ================= 顶栏按钮 ================= */
+$('#btnAddNode').addEventListener('click', ()=>setPlacing(!placing));
+$('#btnConnect').addEventListener('click', ()=>setConnectMode(!connectMode));
+$('#btnPlay').addEventListener('click', ()=> playTimer ? stopPlay() : startPlay());
 
 /* ================= 弹窗：新增时间点 ================= */
 $('#btnAddTp').addEventListener('click', ()=>{
